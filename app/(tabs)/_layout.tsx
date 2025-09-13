@@ -1,35 +1,43 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
+// app/(home)/_layout.tsx
+import React, { useState } from "react";
+import { View, StyleSheet } from "react-native";
+import CustomBottomBar from "@/components/CustomBottomBar";
 
-import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import HomeScreen from "@/src/screens/HomeScreens";
+import ExploreScreen from "@/src/screens/ExploreScreen";
+import ProfileScreen from "@/src/screens/ProfileScreen";
+import ReportsScreen from "@/src/screens/ReportsScreen";
+import NotificationsScreen from "@/src/screens/NotificationsScreen";
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+export default function Layout() {
+  const [activeTab, setActiveTab] = useState("Home");
+
+  const renderScreen = () => {
+    switch (activeTab) {
+      case "Home":
+        return <HomeScreen />;
+      case "Reports":
+        return <ReportsScreen />;
+      case "Notifications":
+        return <NotificationsScreen />;
+      case "Profile":
+        return <ProfileScreen />;
+      case "Add":
+        return <ExploreScreen />; // FAB action
+      default:
+        return <HomeScreen />;
+    }
+  };
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-      }}>
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
-        }}
-      />
-    </Tabs>
+    <View style={styles.container}>
+      <View style={styles.content}>{renderScreen()}</View>
+      <CustomBottomBar onTabPress={setActiveTab} />
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  content: { flex: 1 },
+});
