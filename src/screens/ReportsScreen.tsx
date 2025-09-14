@@ -1,22 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  StyleSheet,
-  View,
-  Text,
-  SafeAreaView,
-  TouchableOpacity,
-  Platform,
-  StatusBar,
-  TextInput,
-  ScrollView,
-  Image,
-  Alert,
-  KeyboardAvoidingView,
+    Alert,
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    SafeAreaView,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
+// For storing the user's token (you might need to install this)
+// import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // --- TYPE DEFINITIONS ---
-type IssueCategory = 'Roads' | 'Waste' | 'Lighting' | 'Water' | 'Other';
+type IssueCategory = 'Road' | 'Waste' | 'Lighting' | 'Water' | 'Other'; // Matched to backend enum
 type Message = {
   id: string;
   sender: 'bot' | 'user' | 'input';
@@ -24,7 +26,7 @@ type Message = {
   content: any;
 };
 
-// --- SVG ICON COMPONENTS ---
+// --- SVG ICON COMPONENTS (unchanged) ---
 const BackIcon = () => (
   <Svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1F2937" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <Path d="M15 18l-6-6 6-6" />
@@ -43,14 +45,14 @@ const SendIcon = () => (
 );
 
 // --- THE MAIN REPORT SCREEN COMPONENT ---
-export default function ReportScreen() {
+export default function ReportScreen({ navigation }: any) { // Added navigation for going back
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
   const [inputValue, setInputValue] = useState('');
   const scrollViewRef = useRef<ScrollView>(null);
 
-  const categories: IssueCategory[] = ['Roads', 'Waste', 'Lighting', 'Water', 'Other'];
-  const reportData = useRef({ title: '', description: '', category: null, mediaUri: null, location: '' }).current;
+  const categories: IssueCategory[] = ['Road', 'Waste', 'Lighting', 'Water', 'Other'];
+  const reportData = useRef({ title: '', description: '', category: null, photo: null, location: 'FC Road, Shivajinagar, Pune' }).current;
 
   const botFlow: { type: Message["type"]; text: string }[] = [
     { type: 'media', text: "Let's report a new issue! First, please add a photo or video." },
@@ -62,7 +64,6 @@ export default function ReportScreen() {
   ];
 
   useEffect(() => {
-    // Start the conversation
     setMessages([{ id: 'start', sender: 'bot', type: 'text', content: "Hi there! 👋" }]);
     setTimeout(() => addBotMessage(0), 1000);
   }, []);
@@ -89,7 +90,7 @@ export default function ReportScreen() {
     setMessages(prev => prev.filter(m => m.sender !== 'input').concat(userMessage));
 
     switch (type) {
-      case 'media': reportData.mediaUri = value; break;
+      case 'media': reportData.photo = value; break;
       case 'category': reportData.category = value; break;
       case 'title': reportData.title = value; break;
       case 'description': reportData.description = value; break;
@@ -101,6 +102,49 @@ export default function ReportScreen() {
       setTimeout(() => addBotMessage(nextStep), 1000);
     }
     setInputValue('');
+  };
+
+  // --- NEW: API SUBMISSION LOGIC ---
+  const handleSubmitReport = async () => {
+    // In a real app, you would get this token from AsyncStorage after the user logs in
+    const userToken = "PASTE_YOUR_LOGIN_TOKEN_HERE_FOR_TESTING"; 
+    
+    if (!userToken) {
+        Alert.alert("Authentication Error", "You must be logged in to report an issue.");
+        return;
+    }
+
+    const finalData = {
+        title: reportData.title,
+        description: reportData.description,
+        category: reportData.category,
+        photo: reportData.photo,
+        // In a real app, you'd get location from GPS
+        // For now, we are sending a hardcoded value
+    };
+
+    try {
+        const res = await fetch("http://10.0.2.2:5000/api/v1/issues", {
+            method: "POST",
+            headers: { 
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${userToken}` // This is how we prove we're logged in
+            },
+            body: JSON.stringify(finalData),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            Alert.alert("Report Submitted!", "Thanks for making your city better.");
+            navigation.goBack(); // Go back to the previous screen
+        } else {
+            Alert.alert("Submission Failed", data.msg || "An error occurred.");
+        }
+    } catch (error) {
+        console.error("Submit error:", error);
+        Alert.alert("Connection Error", "Could not connect to the server.");
+    }
   };
 
   const renderMessageContent = (message: Message) => {
@@ -130,17 +174,17 @@ export default function ReportScreen() {
           <Text style={styles.userMessageText}>{message.content}</Text>
         );
       case 'location':
-        return <Text style={styles.botMessageText}>📍 FC Road, Shivajinagar, Pune</Text>;
+        return <Text style={styles.botMessageText}>📍 {reportData.location}</Text>;
       case 'submit':
         return (
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Final Report Summary</Text>
-            <Image source={{ uri: message.content.mediaUri }} style={styles.summaryImage} />
+            <Image source={{ uri: message.content.photo }} style={styles.summaryImage} />
             <Text style={styles.summaryRow}><Text style={styles.summaryLabel}>Title: </Text>{message.content.title}</Text>
             <Text style={styles.summaryRow}><Text style={styles.summaryLabel}>Category: </Text>{message.content.category}</Text>
             <TouchableOpacity
               style={styles.submitButton}
-              onPress={() => Alert.alert("Report Submitted!", "Thanks for making your city better.")}
+              onPress={handleSubmitReport} // --- MODIFIED: Calls the new API function ---
             >
               <Text style={styles.submitButtonText}>Confirm & Submit</Text>
             </TouchableOpacity>
@@ -159,7 +203,7 @@ export default function ReportScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        <TouchableOpacity><BackIcon /></TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}><BackIcon /></TouchableOpacity>
         <Text style={styles.headerTitle}>New Report</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -206,33 +250,32 @@ export default function ReportScreen() {
   );
 }
 
-// --- STYLESHEET ---
+// --- STYLESHEET (unchanged) ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#E5E7EB' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#D1D5DB' },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937', fontFamily: 'bree-serif-regular-ttf' },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: '#1F2937' },
   chatContainer: { padding: 10, flexGrow: 1 },
   messageRow: { flexDirection: 'row', marginVertical: 5 },
   messageBubble: { borderRadius: 18, padding: 12, maxWidth: '80%' },
   botBubble: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 4 },
   userBubble: { backgroundColor: '#007AFF', borderTopRightRadius: 4 },
-  botMessageText: { fontSize: 16, color: '#1F2937', fontFamily: 'bree-serif-regular-ttf' },
-  userMessageText: { fontSize: 16, color: '#FFFFFF', fontFamily: 'bree-serif-regular-ttf' },
+  botMessageText: { fontSize: 16, color: '#1F2937' },
+  userMessageText: { fontSize: 16, color: '#FFFFFF' },
   inputContainer: { flexDirection: 'row', padding: 10, backgroundColor: '#FFFFFF', borderTopWidth: 1, borderTopColor: '#D1D5DB' },
-  textInput: { flex: 1, height: 40, backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 15, fontFamily: 'bree-serif-regular-ttf' },
+  textInput: { flex: 1, height: 40, backgroundColor: '#F3F4F6', borderRadius: 20, paddingHorizontal: 15 },
   sendButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#007AFF', justifyContent: 'center', alignItems: 'center', marginLeft: 10 },
   mediaInput: { padding: 20, backgroundColor: '#FFFFFF', borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#D1D5DB' },
-  mediaInputText: { color: '#007AFF', fontFamily: 'bree-serif-regular-ttf', marginTop: 8 },
+  mediaInputText: { color: '#007AFF', marginTop: 8 },
   mediaMessage: { width: 200, height: 150, borderRadius: 12 },
   categoryContainer: { padding: 10, backgroundColor: '#FFFFFF', borderRadius: 12, width: '100%', borderWidth: 1, borderColor: '#D1D5DB' },
   categoryChip: { padding: 12, borderRadius: 8, backgroundColor: '#F3F4F6', marginVertical: 4 },
-  categoryText: { textAlign: 'center', color: '#374151', fontFamily: 'bree-serif-regular-ttf' },
+  categoryText: { textAlign: 'center', color: '#374151' },
   summaryCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 15, width: '100%' },
-  summaryTitle: { fontSize: 18, fontWeight: 'bold', fontFamily: 'bree-serif-regular-ttf', marginBottom: 10 },
+  summaryTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   summaryImage: { width: '100%', height: 150, borderRadius: 8, marginBottom: 10 },
   summaryLabel: { fontWeight: 'bold' },
-  summaryRow: { fontSize: 16, fontFamily: 'bree-serif-regular-ttf', marginBottom: 5 },
+  summaryRow: { fontSize: 16, marginBottom: 5 },
   submitButton: { backgroundColor: '#10B981', padding: 15, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  submitButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16, fontFamily: 'bree-serif-regular-ttf' },
+  submitButtonText: { color: '#FFFFFF', fontWeight: 'bold', fontSize: 16 },
 });
-
